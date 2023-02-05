@@ -95,6 +95,10 @@ class CampaignService:
     def delete_task(self, payload: Dict):
         # code to delete a task in Cloud Tasks
         pass
+    
+    def create_schedule(self, payload: Dict):
+        # code to create a schedule in Cloud Scheduler
+        pass
 
     def edit_schedule(self, payload: Dict):
         # code to edit a schedule in Cloud Scheduler

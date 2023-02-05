@@ -1,6 +1,6 @@
 PHONY: test
 test:
-	python -m pytest -vv
+	python -m pytest -vv $(file)
 
 PHONY: install
 install:
