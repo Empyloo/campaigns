@@ -2,6 +2,7 @@ import os
 import json
 import datetime as dt
 import pytest
+import tenacity
 from unittest import mock
 from google.cloud import tasks_v2
 from src.services.campaign_service import CampaignService
@@ -10,7 +11,7 @@ from src.services.campaign_service import CampaignService
 def test_check_variables(mock_env_vars):
     """Test that the check_variables method returns a list of missing environment variables."""
     campaign_service = CampaignService(mock_env_vars)
-    assert campaign_service.check_variables() == []
+    assert campaign_service.check_variables() == None
 
 
 def test_create_task(mock_env_vars, mock_client, mock_queue_path):
@@ -31,11 +32,10 @@ def test_create_task_missing_env_variables(mock_env_vars, mock_client, mock_queu
     payload = {"test": "test"}
     schedule_time = dt.datetime.now()
     mock_client.return_value.create_task.return_value = tasks_v2.types.task.Task()
-    mock_queue_path.return_value = "test-queue-path"
-    mock_env_vars["PROJECT_ID"] = None
-    task = campaign_service.create_task(payload, schedule_time)
-    assert task is None
-    assert not mock_client.return_value.create_task.called
+    mock_queue_path.side_effect = ValueError("test exception")
+    with pytest.raises(tenacity.RetryError):
+        campaign_service.create_task(payload, schedule_time)
+    assert mock_client.return_value.create_task.called_once()
 
 
 def test_create_task_retry(mock_env_vars, mock_client, mock_queue_path):

@@ -2,29 +2,37 @@ import os
 import logging
 import datetime as dt
 import google_crc32c
+from flask import Response
 import functions_framework
 from google.cloud import secretmanager
-from src.services.campaign_service import CampaignService
 from typing import List, Optional, Tuple
+
+
+from src.services.campaign_service import CampaignService
+from src.services.secret_service import get_secret_payload
+from src.utils.token_extractor import extract_token_from_header
+from src.utils.get_env_vars import get_env_vars
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-from flask import Response
 
 
 @functions_framework.http
 def main(request) -> Response:
-    env_vars = {
-        "PROJECT_ID": os.environ.get("PROJECT_ID"),
-        "REGION": os.environ.get("REGION"),
-        "SCHEDULER_FUNCTION_URL": os.environ.get("SCHEDULER_FUNCTION_URL"),
-        "SERVICE_ACCOUNT": os.environ.get("SERVICE_ACCOUNT"),
-        "QUEUE_NAME": os.environ.get("QUEUE_NAME"),
-    }
-    campaign_service = CampaignService(env_vars)
-
     payload = request.get("payload")
     action = payload.get("action")
+
+    # if no payload or action, return error
+    if not payload or not action:
+        logger.error("No payload or action provided")
+        return Response(status=400, response="No payload or action provided")
+
+    env_vars = get_env_vars()
+    if not env_vars:
+        logger.error("Error getting env vars.")
+        return Response(status=500, response="Server error")
+
+    campaign_service = CampaignService(env_vars)
 
     if action == "create_task":
         response = create_task(request, campaign_service)

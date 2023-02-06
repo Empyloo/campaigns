@@ -18,9 +18,14 @@ class CampaignService:
         self.audience = env_vars.get("SCHEDULER_FUNCTION_URL")
         self.service_account_email = env_vars.get("SERVICE_ACCOUNT")
         self.queue_name = env_vars.get("QUEUE_NAME")
+        self.check_variables()
 
     def check_variables(self) -> List[str]:
-        """Check that all required environment variables are set."""
+        """Check that all required environment variables are set.
+        If none are missing, do nothing.
+        If any are missing, raise a ValueError with a list of
+        the missing variables.
+        """
         variables = [
             "PROJECT_ID",
             "REGION",
@@ -32,7 +37,10 @@ class CampaignService:
         for var in variables:
             if not self.env_vars.get(var):
                 undefined_variables.append(var)
-        return undefined_variables
+        if undefined_variables:
+            raise ValueError(
+                f"Undefined environment variables: {', '.join(undefined_variables)}"
+            )
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=3))
     def create_task(
@@ -47,13 +55,6 @@ class CampaignService:
             The created task.
         """
         try:
-            missing_env_variable = self.check_variables()
-            if missing_env_variable:
-                logger.error(
-                    "Missing environment variables %s", missing_env_variable, exc_info=1
-                )
-                return None
-
             queue_name = queue_name or self.queue_name
 
             client = tasks_v2.CloudTasksClient()
@@ -95,7 +96,7 @@ class CampaignService:
     def delete_task(self, payload: Dict):
         # code to delete a task in Cloud Tasks
         pass
-    
+
     def create_schedule(self, payload: Dict):
         # code to create a schedule in Cloud Scheduler
         pass
@@ -107,5 +108,3 @@ class CampaignService:
     def delete_schedule(self, payload: Dict):
         # code to delete a schedule in Cloud Scheduler
         pass
-
-
