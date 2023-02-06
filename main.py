@@ -1,3 +1,4 @@
+# main.py
 import os
 import logging
 import datetime as dt
@@ -22,7 +23,6 @@ def main(request) -> Response:
     payload = request.get("payload")
     action = payload.get("action")
 
-    # if no payload or action, return error
     if not payload or not action:
         logger.error("No payload or action provided")
         return Response(status=400, response="No payload or action provided")
