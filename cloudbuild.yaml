@@ -1,0 +1,28 @@
+# cloudbuild.yaml
+steps:
+  # Tests
+  - name: python
+    id: 'test'
+    entrypoint: 'bash'
+    args:
+      - -c
+      - |
+        make install
+        make test
+  # Deploy
+  - name: gcr.io/cloud-builders/gcloud
+    id: 'deploy'
+    env:
+        - 'CLOUDSDK_COMPUTE_ZONE=europe-west2'
+    args:
+      - functions
+      - deploy
+      - campaigns
+      - --gen2
+      - --runtime=python310
+      - --region=europe-west2
+      - --source=.
+      - --entry-point=main
+      - --trigger-http
+      - --allow-unauthenticated
+      - --memory=256MiB

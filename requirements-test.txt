@@ -1,0 +1,4 @@
+pytest
+freezegun
+black
+pytest-mock==3.10.0
