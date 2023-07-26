@@ -47,14 +47,13 @@ steps:
         gcloud functions describe survey-executor --gen2 --region=europe-west2 --format="value(serviceConfig.uri)" > _SURVEY_EXECUTOR_FUNCTION_URL
         gcloud functions describe survey-analyser --gen2 --region=europe-west2 --format="value(serviceConfig.uri)" > _SURVEY_ANALYSER_FUNCTION_URL
         gcloud functions deploy campaigns \
-          --region=$REGION \
+          --region=$_REGION \
           --runtime=python310 \
           --trigger-http \
           --allow-unauthenticated
           --gen2 \
           --source=. \
           --entry-point=main \
-          --service-account=$SUPABASE_SERVICE_ROLE_SECRET_ID@$PROJECT_ID.iam.gserviceaccount.com \
           --service-account=${_SERVICE_ACCOUNT} \
           --set-env-vars=SERVICE_ACCOUNT=${_SERVICE_ACCOUNT} \
           --set-env-vars=PROJECT_ID=${_PROJECT_ID} \
