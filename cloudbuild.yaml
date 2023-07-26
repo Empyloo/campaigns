@@ -1,6 +1,6 @@
 # cloudbuild.yaml
 steps:
-  # Tests
+  # Step 1: Tests
   - name: python
     id: 'test'
     entrypoint: 'bash'
@@ -8,21 +8,63 @@ steps:
       - -c
       - |
         make install
-        make test
-  # Deploy
-  - name: gcr.io/cloud-builders/gcloud
-    id: 'deploy'
-    env:
-        - 'CLOUDSDK_COMPUTE_ZONE=europe-west2'
+  # Step 2: Get the URL of the survey-executor function
+  - id: 'Get Survey-Executor Cloud Function URL'
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
     args:
-      - functions
-      - deploy
-      - campaigns
-      - --gen2
-      - --runtime=python310
-      - --region=europe-west2
-      - --source=.
-      - --entry-point=main
-      - --trigger-http
-      - --allow-unauthenticated
-      - --memory=256MiB
+      - -c
+      - |
+        gcloud functions describe survey-executor --gen2 --region=europe-west2 --format="value(serviceConfig.uri)" > _SURVEY_EXECUTOR_FUNCTION_URL
+  # Step 3: Get the URL of the survey-analyser function
+  - id: 'Get Survey-Analyser Cloud Function URL'
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - -c
+      - |
+        gcloud functions describe survey-analyser --gen2 --region=europe-west2 --format="value(serviceConfig.uri)" > _SURVEY_ANALYSER_FUNCTION_URL
+  # Step 4: Deploy the Campaigns Cloud Function
+  - id: 'Deploy Campigns Cloud Function'
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    waitFor:
+      - 'Get Survey-Executor Cloud Function URL'
+      - 'Get Survey-Analyser Cloud Function URL'
+    entrypoint: 'bash'
+    env:
+      - 'SURVEY_EXECUTOR_FUNCTION_URL=$(cat _SURVEY_EXECUTOR_FUNCTION_URL)'
+      - 'SURVEY_ANALYSER_FUNCTION_URL=$(cat _SURVEY_ANALYSER_FUNCTION_URL)'
+      - 'REGION=$_REGION'
+      - 'SUPABASE_URL=${_SUPABASE_URL}'
+      - 'SUPABASE_ANON_KEY=${_SUPABASE_ANON_KEY}'
+      - 'SUPABASE_SERVICE_ROLE_SECRET_ID=${_SUPABASE_SERVICE_ROLE_SECRET_ID}'
+      - 'VERSION_ID=${_VERSION_ID}'
+      - 'SENTRY_DSN=${_SENTRY_DSN}'
+      - 'QUEUE_NAME=${_QUEUE_NAME}'
+    args:
+      - -c
+      - |
+        gcloud functions describe survey-executor --gen2 --region=europe-west2 --format="value(serviceConfig.uri)" > _SURVEY_EXECUTOR_FUNCTION_URL
+        gcloud functions describe survey-analyser --gen2 --region=europe-west2 --format="value(serviceConfig.uri)" > _SURVEY_ANALYSER_FUNCTION_URL
+        gcloud functions deploy campaigns \
+          --region=$REGION \
+          --runtime=python310 \
+          --trigger-http \
+          --allow-unauthenticated
+          --gen2 \
+          --source=. \
+          --entry-point=main \
+          --service-account=$SUPABASE_SERVICE_ROLE_SECRET_ID@$PROJECT_ID.iam.gserviceaccount.com \
+          --service-account=${_SERVICE_ACCOUNT} \
+          --set-env-vars=SERVICE_ACCOUNT=${_SERVICE_ACCOUNT} \
+          --set-env-vars=PROJECT_ID=${_PROJECT_ID} \
+          --set-env-vars=PROJECT_NUMBER=${_PROJECT_NUMBER} \
+          --set-env-vars=REGION=${_REGION} \
+          --set-env-vars=SUPABASE_URL=${_SUPABASE_URL} \
+          --set-env-vars=SUPABASE_ANON_KEY=${_SUPABASE_ANON_KEY} \
+          --set-env-vars=SUPABASE_SERVICE_ROLE_SECRET_ID=${_SUPABASE_SERVICE_ROLE_SECRET_ID} \
+          --set-env-vars=VERSION_ID=${_VERSION_ID} \
+          --set-env-vars=SENTRY_DSN=${_SENTRY_DSN} \
+          --set-env-vars=SURVEY_EXECUTOR_FUNCTION_URL=${_SURVEY_EXECUTOR_FUNCTION_URL} \
+          --set-env-vars=SURVEY_ANALYSER_FUNCTION_URL=${_SURVEY_ANALYSER_FUNCTION_URL} \
+          --set-env-vars=QUEUE_NAME=${_QUEUE_NAME}

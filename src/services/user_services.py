@@ -1,10 +1,11 @@
 # src/services/user_services.py
+# src/user_service.py
 import jwt
 import requests
 import datetime
 
 
-class UserService:
+class AdminUserService:
     def __init__(self, base_url: str, anon_key: str, service_key: str):
         self.base_url = base_url
         self.anon_key = anon_key
@@ -14,6 +15,15 @@ class UserService:
             "X-Client-Info": "supabase-py/0.01",
             "Authorization": f"Bearer {self.service_key}",
         }
+
+    def get_user_by_email(self, email: str):
+        """Get a user by their email"""
+        response = requests.get(
+            f"{self.base_url}/auth/v1/admin/users?email={email}",
+            headers=self.headers,
+            timeout=5,
+        )
+        return response
 
     def get_user_by_id(self, user_id: str):
         """Get a user by their user_id"""
@@ -47,6 +57,7 @@ class UserService:
         """Checks if the JWT token is currently valid.
         If the token is  valid the decoded JWT is returned.
         In any other case, a dictionary with the error message is returned.
+
         Returns:
             Dict[str, str]:
         """
@@ -68,6 +79,7 @@ class UserService:
 
     def verify_user(self, jwt_token: str) -> dict:
         """Verifies a user based on the user `id` and JWT token.
+
         Returns:
             dict:
                 A dictionary with the user metadata if the user is a super admin.
@@ -77,15 +89,40 @@ class UserService:
             return jwt_valid
 
         user_id = jwt_valid.get("sub")
+        if user_id is None:
+            return {"error": "No user id in JWT"}
         response = self.get_user_by_id(user_id)
         if response.status_code != 200:
             return {"error": "User id does not exis."}
 
         user = response.json()
-        if user.get("user_metadata") is None:
-            return {"error": "User does not have user metadata"}
+        if user.get("app_metadata") is None:
+            return {"error": "User does not have app metadata"}
 
-        user_metadata = user.get("user_metadata")
+        user_metadata = user.get("app_metadata")
         if user_metadata.get("role") != "super_admin":
             return {"error": "User is not a super admin"}
         return user_metadata
+
+
+if __name__ == "__main__":
+    from exp_invite import base_url, anon_key, service_role_key
+
+    admin_user_service = AdminUserService(
+        base_url=base_url, anon_key=anon_key, service_key=service_role_key
+    )
+    # try:
+    #     response = admin_user_service.delete_user(
+    #         "e0a0a0a0-0a0a-0a0a-0a0a-0a0a0a0a0a0a"
+    #     )
+    #     print(response.status_code)
+    # except Exception as e:
+    #     print(e)
+
+    # get user by email
+    try:
+        response = admin_user_service.get_user_by_email("st.test@icloud.com")
+        print(response.status_code)
+        print(response.json()["users"][0]["id"])
+    except Exception as e:
+        print(e)

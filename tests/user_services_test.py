@@ -1,16 +1,16 @@
-# tests/user_services_test.py 
+# tests/user_services_test.py
 import pytest
 import freezegun
 from unittest.mock import patch
 import jwt
 import requests
 import datetime
-from src.services.user_services import UserService
+from src.services.user_services import AdminUserService
 
 
 @pytest.fixture
 def user_service():
-    return UserService(
+    return AdminUserService(
         base_url="https://example.com",
         anon_key="anon_key",
         service_key="service_key",

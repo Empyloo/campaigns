@@ -9,7 +9,7 @@ def test_get_env_vars(mock_logger):
     os_environ = {
         "PROJECT_ID": "project_id",
         "REGION": "region",
-        "SCHEDULER_FUNCTION_URL": "scheduler_function_url",
+        "SURVEY_FUNCTION_URL": "survey_function_url",
         "SERVICE_ACCOUNT": "service_account",
         "QUEUE_NAME": "queue_name",
     }
@@ -23,7 +23,7 @@ def test_get_env_vars(mock_logger):
         assert env_vars == {
             "PROJECT_ID": None,
             "REGION": None,
-            "SCHEDULER_FUNCTION_URL": None,
+            "SURVEY_FUNCTION_URL": None,
             "SERVICE_ACCOUNT": None,
             "QUEUE_NAME": None,
         }

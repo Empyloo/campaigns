@@ -1,7 +1,7 @@
 from typing import Optional
 
 
-def extract_token_from_header(headers) -> Optional[str]:
+def extract_token_from_header(headers: dict) -> Optional[str]:
     authorization_header = headers.get("Authorization")
     if not authorization_header:
         return "Error: No Authorization header found: %s" % headers

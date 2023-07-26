@@ -1,10 +1,12 @@
-import os
 import logging
 import json
 import datetime as dt
-from typing import Dict, List
-from tenacity import retry, stop_after_attempt, wait_exponential
+from typing import Dict, List, Union
+from tenacity import retry
+from tenacity.stop import stop_after_attempt
+from tenacity.wait import wait_exponential
 from google.cloud import tasks_v2
+from supacrud import Supabase, ResponseType
 
 logger = logging.getLogger(__name__)
 
@@ -14,13 +16,31 @@ class CampaignService:
         self.env_vars = env_vars
         self.project = env_vars.get("PROJECT_ID")
         self.location = env_vars.get("REGION")
-        self.url = env_vars.get("SCHEDULER_FUNCTION_URL")
-        self.audience = env_vars.get("SCHEDULER_FUNCTION_URL")
+        self.url = env_vars.get("SURVEY_FUNCTION_URL")
+        self.audience = env_vars.get("SURVEY_FUNCTION_URL")
         self.service_account_email = env_vars.get("SERVICE_ACCOUNT")
         self.queue_name = env_vars.get("QUEUE_NAME")
         self.check_variables()
 
-    def check_variables(self) -> List[str]:
+    def action_dispatcher(self, action_type: str):
+        """
+        Selects the action to be performed based on the action type.
+        Args:
+            action_type: The action type.
+
+        Returns:
+            The function to be called.
+        """
+        if action_type == "create_campaign":
+            return self.create_campaign
+        elif action_type == "edit_campaign":
+            return self.edit_campaign
+        elif action_type == "delete_campaign":
+            return self.delete_campaign
+        else:
+            raise ValueError(f"Invalid action type: {action_type}")
+
+    def check_variables(self) -> Union[None, List[str]]:
         """Check that all required environment variables are set.
         If none are missing, do nothing.
         If any are missing, raise a ValueError with a list of
@@ -29,7 +49,7 @@ class CampaignService:
         variables = [
             "PROJECT_ID",
             "REGION",
-            "SCHEDULER_FUNCTION_URL",
+            "SURVEY_FUNCTION_URL",
             "SERVICE_ACCOUNT",
             "QUEUE_NAME",
         ]
@@ -43,12 +63,11 @@ class CampaignService:
             )
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=3))
-    def create_task(
-        self, payload: dict, schedule_time: dt, queue_name: str = None
-    ) -> tasks_v2.types.task.Task:
+    def create_task(self, payload: dict, task_name: str, schedule_time: Union[dt.datetime, None] = None, queue_name: Union[None, str] = None) -> tasks_v2.types.task.Task:  # type: ignore
         """Create a task for a given queue with an arbitrary payload and schedule time.
         Args:
             payload: The task HTTP request body.
+            task_name: The task name which will be used as a unique identifier for the task.
             schedule_time: The time the task should be scheduled for.
             queue_name: The queue name. If None, the default queue name from self.env_vars is used.
         Returns:
@@ -68,8 +87,10 @@ class CampaignService:
                         "audience": self.audience,
                     },
                 },
-                "schedule_time": schedule_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                "name": f"projects/{self.project}/locations/{self.location}/queues/{queue_name}/tasks/{task_name}",
             }
+            if schedule_time:
+                task["schedule_time"] = schedule_time # .strftime("%Y-%m-%dT%H:%M:%S.%fZ")  # type: ignore
 
             payload_str = json.dumps(payload)
             converted_payload = payload_str.encode()
@@ -89,22 +110,123 @@ class CampaignService:
             )
             raise
 
-    def edit_task(self, payload: Dict):
-        # code to edit a task in Cloud Tasks
-        pass
+    def edit_task(
+        self,
+        payload: dict,
+        task_name: str,
+        schedule_time: Union[dt.datetime, None] = None,
+        queue_name: Union[None, str] = None,
+    ):
+        """
+        Edits a task for a given queue.
+        As tasks cannot be directly modified, this function deletes the existing task and creates a new one.
+        Args:
+            payload: The task HTTP request body.
+            task_name: The task name which will be used as a unique identifier for the task.
+            schedule_time: The time the task should be scheduled for.
+            queue_name: The queue name. If None, the default queue name from self.env_vars is used.
+        """
+        try:
+            task_deletion = self.delete_task(task_name=task_name, queue_name=queue_name)
+            if task_deletion:
+                self.create_task(
+                    payload=payload,
+                    task_name=task_name,
+                    schedule_time=schedule_time,
+                    queue_name=queue_name,
+                )
+        except Exception as error:
+            logger.error("Error editing task: %s", error)
+            raise
 
-    def delete_task(self, payload: Dict):
-        # code to delete a task in Cloud Tasks
-        pass
+    def delete_task(self, task_name: str, queue_name: Union[None, str] = None) -> bool:
+        """
+        Deletes a task from a given queue.
+        Args:
+            task_name: The task name which is used as a unique identifier for the task.
+            queue_name: The queue name. If None, the default queue name from self.env_vars is used.
+        """
+        try:
+            client = tasks_v2.CloudTasksClient()
+            task_name = f"projects/{self.project}/locations/{self.location}/queues/{queue_name or self.queue_name}/tasks/{task_name}"
+            client.delete_task(name=task_name)
+            return True
+        except Exception as error:
+            logger.error("Error deleting task: %s", error)
+            if "entity was not found." in str(error):
+                logger.error("Task not found: %s", task_name)
+                return False
+            raise
 
-    def create_schedule(self, payload: Dict):
-        # code to create a schedule in Cloud Scheduler
-        pass
+    def create_campaign(self, supabase: Supabase, payload: Dict) -> ResponseType:
+        """
+        Creates a campaign in the campaigns table.
+        If the campaign type is recurring, only a campaign is created in the campaigns table.
+        If the campaign type is instant, a task is created in Cloud Tasks.
+        Args:
+            supabase: The Supabase instance.
+            payload: The payload from the request.
+        Returns:
+            The created campaign.
+        """
+        try:
+            campaign = supabase.create(
+                url="rest/v1/campaigns",
+                data=payload,
+            )
+            campaign_id = campaign[0]["id"]  # type: ignore
+            if payload["type"] == "instant":
+                self.create_task(
+                    payload=payload,
+                    queue_name=self.queue_name,
+                    task_name=f"{campaign_id}",
+                )
+            return campaign
+        except Exception as error:
+            logger.error("Error creating campaign: %s", error)
+            raise
 
-    def edit_schedule(self, payload: Dict):
-        # code to edit a schedule in Cloud Scheduler
-        pass
+    def edit_campaign(self, supabase: Supabase, payload: Dict):
+        """
+        Edits a campaign in the campaigns table.
+        If the campaign type is instant, the associated task in Cloud Tasks is also updated.
+        Args:
+            supabase: The Supabase instance.
+            payload: The payload from the request.
+        """
+        try:
+            campaign_id = payload["id"]
+            updated_campaign = supabase.update(
+                url=f"rest/v1/campaigns?id=eq.{campaign_id}",
+                data=payload,
+            )
+            self.edit_task(
+                payload=payload,
+                task_name=f"{campaign_id}",
+                queue_name=self.queue_name,
+            )
+            return updated_campaign
+        except Exception as error:
+            logger.error("Error editing campaign: %s", error)
+            raise
 
-    def delete_schedule(self, payload: Dict):
-        # code to delete a schedule in Cloud Scheduler
-        pass
+    def delete_campaign(self, supabase: Supabase, payload: Dict):
+        """
+        Deletes a campaign from the campaigns table.
+        If the campaign type is instant, the associated task in Cloud Tasks is also deleted.
+        Args:
+            supabase: The Supabase instance.
+            payload: The payload from the request.
+        """
+        try:
+            campaign_id = payload["id"]
+            deleted_campaign = supabase.delete(
+                url=f"rest/v1/campaigns?id=eq.{campaign_id}",
+            )
+            self.delete_task(task_name=f"{campaign_id}", queue_name=self.queue_name)
+            print(deleted_campaign)
+            logger.info("Deleted campaign %s", campaign_id)
+            return deleted_campaign
+        except Exception as error:
+            logger.error("Error deleting campaign: %s", error)
+            raise

@@ -1,105 +1,117 @@
-# main.py
-import os
 import logging
 import datetime as dt
-import google_crc32c
-from flask import Response
+from flask import jsonify, Response, Request
 import functions_framework
-from google.cloud import secretmanager
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Tuple, Union
+from src.errors.verification_error import VerificationError
 
-
+from src.services.user_services import AdminUserService
 from src.services.campaign_service import CampaignService
-from src.services.secret_service import get_secret_payload
+from src.utils.get_secret_payload import get_secret_payload
 from src.utils.token_extractor import extract_token_from_header
 from src.utils.get_env_vars import get_env_vars
+from supacrud import Supabase, ResponseType
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+# Get environment variables once and reuse
+env_vars = get_env_vars()
+
+# Create a CampaignService instance once and reuse
+campaign_service = CampaignService(env_vars)
+
+# get the service key
+service_key = get_secret_payload(
+    project_id=env_vars["PROJECT_ID"],
+    secret_id=env_vars["SUPABASE_SERVICE_ROLE_SECRET_ID"],
+    version_id=env_vars["VERSION_ID"],
+)
+if not service_key:
+    raise Exception("Service key not found")
+
+# Create an AdminUserService instance once and reuse
+admin_user_service = AdminUserService(
+    base_url=env_vars["SUPABASE_URL"],
+    anon_key=env_vars["SUPABASE_ANON_KEY"],
+    service_key=service_key,
+)
+
+supabase_client = Supabase(
+    base_url=env_vars["SUPABASE_URL"],
+    anon_key=env_vars["SUPABASE_ANON_KEY"],
+    service_role_key=service_key,
+)
+
+
+def verify_request(request: Request) -> Tuple[str, str, Dict[str, Any]]:
+    """
+    Validate the request and extract queue name, action type, and payload.
+
+    Parameters:
+    request (request): The incoming request from the client.
+
+    Returns:
+    Tuple[str, str, Dict[str, Any]]: Returns a tuple containing the queue
+        name, action type, and payload if the request is valid.
+
+    Raises:
+    VerificationError: If the request is invalid.
+    """
+    data = request.get_json()
+    if not data:
+        raise VerificationError("Invalid request body")
+
+    jwt_token = extract_token_from_header(request.headers)
+    if not jwt_token:
+        raise VerificationError("No token provided")
+
+    # verify user token
+    token_verification = admin_user_service.verify_user(jwt_token)
+    if "error" in token_verification:
+        raise VerificationError(token_verification["error"])
+
+    queue_name = data.get("queue_name")
+    action_type = data.get("action_type")
+    payload = data.get("payload")
+
+    if not all([queue_name, action_type, payload]):
+        raise VerificationError(
+            "Missing queue_name, action_type, or payload in request data"
+        )
+
+    if action_type not in ["create_campaign", "edit_campaign", "delete_campaign"]:
+        raise VerificationError("Invalid action_type provided in payload")
+
+    return queue_name, action_type, payload
+
 
 @functions_framework.http
-def main(request) -> Response:
-    payload = request.get("payload")
-    action = payload.get("action")
+def main(request: Request) -> Union[Response, Tuple[Response, int]]:
+    """
+    The main entry point for the cloud function. Handles the incoming
+    request, verifies it and dispatches it to the correct function
+    based on the action type in the payload.
 
-    if not payload or not action:
-        logger.error("No payload or action provided")
-        return Response(status=400, response="No payload or action provided")
+    Parameters:
+    request (request): The incoming request from the client.
 
-    env_vars = get_env_vars()
-    if not env_vars:
-        logger.error("Error getting env vars.")
-        return Response(status=500, response="Server error")
-
-    campaign_service = CampaignService(env_vars)
-
-    if action == "create_task":
-        response = create_task(request, campaign_service)
-    elif action == "edit_task":
-        response = edit_task(request, campaign_service)
-    elif action == "delete_task":
-        response = delete_task(request, campaign_service)
-    elif action == "edit_schedule":
-        response = edit_schedule(request, campaign_service)
-    elif action == "delete_schedule":
-        response = delete_schedule(request, campaign_service)
-    else:
-        logger.error("Invalid action provided: %s", action)
-        return Response(status=400, response="Invalid action provided")
-
-    return Response(response, status=200)
-
-
-def create_task(payload, campaign_service) -> str:
-    schedule_time = dt.datetime.strptime(
-        payload.get("schedule_time"), "%Y-%m-%d %H:%M:%S"
-    )
-    queue_name = payload.get("queue_name")
-    campaign_service.create_task(payload, schedule_time, queue_name)
-    return "Created task"
-
-
-def edit_task(payload, campaign_service) -> str:
+    Returns:
+    Union[Response, Tuple[Response, int]]: The response to be returned to the client.
+    """
     try:
-        campaign_service.edit_task(payload)
-        return "Edited task"
+        queue_name, action_type, payload = verify_request(request)
+        response_action = campaign_service.action_dispatcher(
+            action_type=action_type,
+        )
+        response = response_action(
+            supabase=supabase_client,
+            payload=payload,
+        )
+        return jsonify(response), 200
+    except VerificationError as error:
+        logger.error("Error processing request: %s", error.message)
+        return jsonify({"message": error.message}), 400
     except Exception as error:
-        logger.error("Error editing task: %s", error, exc_info=1)
-        return "Error editing task %s" % error
-
-
-def delete_task(payload, campaign_service) -> str:
-    try:
-        campaign_service.delete_task(payload)
-        return "Deleted task"
-    except Exception as error:
-        logger.error("Error deleting task: %s", error, exc_info=1)
-        return "Error deleting task %s" % error
-
-
-def create_schedule(payload, campaign_service) -> str:
-    try:
-        campaign_service.create_cron_schedule(payload)
-        return "Created schedule"
-    except Exception as error:
-        logger.error("Error creating schedule: %s", error, exc_info=1)
-        return "Error creating schedule %s" % error
-
-
-def edit_schedule(payload, campaign_service) -> str:
-    try:
-        campaign_service.edit_schedule(payload)
-        return "Edited schedule"
-    except Exception as error:
-        logger.error("Error editing schedule: %s", error, exc_info=1)
-        return "Error editing schedule %s" % error
-
-
-def delete_schedule(payload, campaign_service) -> str:
-    try:
-        campaign_service.delete_schedule(payload)
-        return "Deleted schedule"
-    except Exception as error:
-        logger.error("Error deleting schedule: %s", error, exc_info=1)
-        return "Error deleting schedule %s" % error
+        logger.error("Error processing request: %s", error)
+        return jsonify({"message": "Internal server error"}), 500
