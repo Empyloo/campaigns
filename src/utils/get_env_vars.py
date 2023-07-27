@@ -21,7 +21,7 @@ def get_env_vars() -> dict:
         return {
             "PROJECT_ID": os.environ.get("PROJECT_ID"),
             "REGION": os.environ.get("REGION"),
-            "SURVEY_FUNCTION_URL": os.environ.get("SURVEY_FUNCTION_URL"),
+            "SURVEY_EXECUTOR_FUNCTION_URL": os.environ.get("SURVEY_EXECUTOR_FUNCTION_URL"),
             "SERVICE_ACCOUNT": os.environ.get("SERVICE_ACCOUNT"),
             "QUEUE_NAME": os.environ.get("QUEUE_NAME"),
             "SUPABASE_SERVICE_ROLE_SECRET_ID": os.environ.get(

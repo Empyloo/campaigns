@@ -8,7 +8,7 @@ def mock_env_vars():
     return {
         "PROJECT_ID": "test-project",
         "REGION": "test-region",
-        "SURVEY_FUNCTION_URL": "test-url",
+        "SURVEY_EXECUTOR_FUNCTION_URL": "test-url",
         "SERVICE_ACCOUNT": "test-service-account",
         "QUEUE_NAME": "test-queue-name",
     }

@@ -16,8 +16,8 @@ class CampaignService:
         self.env_vars = env_vars
         self.project = env_vars.get("PROJECT_ID")
         self.location = env_vars.get("REGION")
-        self.url = env_vars.get("SURVEY_FUNCTION_URL")
-        self.audience = env_vars.get("SURVEY_FUNCTION_URL")
+        self.url = env_vars.get("SURVEY_EXECUTOR_FUNCTION_URL")
+        self.audience = env_vars.get("SURVEY_EXECUTOR_FUNCTION_URL")
         self.service_account_email = env_vars.get("SERVICE_ACCOUNT")
         self.queue_name = env_vars.get("QUEUE_NAME")
         self.check_variables()
@@ -49,7 +49,7 @@ class CampaignService:
         variables = [
             "PROJECT_ID",
             "REGION",
-            "SURVEY_FUNCTION_URL",
+            "SURVEY_EXECUTOR_FUNCTION_URL",
             "SERVICE_ACCOUNT",
             "QUEUE_NAME",
         ]
