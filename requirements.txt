@@ -43,7 +43,7 @@ pytz==2022.7.1
 requests==2.28.2
 rsa==4.9
 six==1.16.0
-supacrud @ git+https://github.com/Empyloo/supacrud.git@6198374c0221cb9c03120f837963a996ba03246a
+supacrud @ git+https://github.com/Empyloo/supacrud.git@f365e6afb38e2fd26a110a5234f046585a2f0945
 tenacity==8.1.0
 tomli==2.0.1
 urllib3==1.26.14
