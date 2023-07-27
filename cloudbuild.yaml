@@ -50,7 +50,7 @@ steps:
           --region=$_REGION \
           --runtime=python310 \
           --trigger-http \
-          --allow-unauthenticated
+          --allow-unauthenticated \
           --gen2 \
           --source=. \
           --entry-point=main \
