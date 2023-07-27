@@ -6,6 +6,7 @@ from tenacity import retry
 from tenacity.stop import stop_after_attempt
 from tenacity.wait import wait_exponential
 from google.cloud import tasks_v2
+from google.api_core.exceptions import PermissionDenied
 from supacrud import Supabase, ResponseType
 
 from src.models.campaign import Campaign
@@ -154,11 +155,15 @@ class CampaignService:
             client.delete_task(name=task_name)
             return True
         except Exception as error:
-            logger.error("Error deleting task: %s", error)
-            if "entity was not found." in str(error):
+            if isinstance(error, PermissionDenied):
+                logger.warning("Permission denied while deleting task: %s", error)
+                return False
+            elif "entity was not found." in str(error):
                 logger.error("Task not found: %s", task_name)
                 return False
-            raise
+            else:
+                logger.error("Error deleting task: %s", error)
+                raise
 
     def create_campaign(self, supabase: Supabase, payload: Dict) -> ResponseType:
         """
