@@ -8,6 +8,8 @@ from tenacity.wait import wait_exponential
 from google.cloud import tasks_v2
 from supacrud import Supabase, ResponseType
 
+from src.models.campaign import Campaign
+
 logger = logging.getLogger(__name__)
 
 
@@ -170,18 +172,21 @@ class CampaignService:
             The created campaign.
         """
         try:
-            campaign = supabase.create(
-                url="rest/v1/campaigns",
-                data=payload,
+            campaign_data = Campaign(**payload)
+            rpc_params = campaign_data.to_rpc_params()
+            campaign_id = supabase.rpc(
+                url="rest/v1/rpc/create_campaign",
+                params=rpc_params,
             )
-            campaign_id = campaign[0]["id"]  # type: ignore
+
+            logger.info("Created campaign %s", campaign_id)
             if payload["type"] == "instant":
                 self.create_task(
                     payload=payload,
                     queue_name=self.queue_name,
                     task_name=f"{campaign_id}",
                 )
-            return campaign
+            return campaign_id
         except Exception as error:
             logger.error("Error creating campaign: %s", error)
             raise
