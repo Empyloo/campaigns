@@ -181,6 +181,7 @@ class CampaignService:
 
             logger.info("Created campaign %s", campaign_id)
             if payload["type"] == "instant":
+                payload["id"] = campaign_id
                 self.create_task(
                     payload=payload,
                     queue_name=self.queue_name,
