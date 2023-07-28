@@ -74,7 +74,7 @@ def verify_request(request: Request) -> Tuple[str, str, Dict[str, Any]]:
     queue_name = data.get("queue_name")
     action_type = data.get("action_type")
     payload = data.get("payload")
-
+    logger.info("Received request with payload: %s", payload)
     if not all([queue_name, action_type, payload]):
         raise VerificationError(
             "Missing queue_name, action_type, or payload in request data"
