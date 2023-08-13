@@ -99,6 +99,9 @@ def main(request: Request) -> Union[Response, Tuple[Response, int]]:
     Returns:
     Union[Response, Tuple[Response, int]]: The response to be returned to the client.
     """
+    print(request.headers)
+    print(request.data)
+
     try:
         request.get_json()
     except Exception as error:
@@ -107,6 +110,7 @@ def main(request: Request) -> Union[Response, Tuple[Response, int]]:
         request.get_data()
     except Exception as error:
         logger.error("Error processing request data: %s", error)
+        logger.error("Raw request data: %s", request.data)
     try:
         queue_name, action_type, payload = verify_request(request)
         response_action = campaign_service.action_dispatcher(
