@@ -178,6 +178,7 @@ class CampaignService:
         """
         try:
             campaign_data = Campaign(**payload)
+            logger.info("Creating campaign %s", campaign_data)
             rpc_params = campaign_data.to_rpc_params()
             campaign_id = supabase.rpc(
                 url="rest/v1/rpc/create_campaign",
