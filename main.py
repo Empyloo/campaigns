@@ -100,6 +100,14 @@ def main(request: Request) -> Union[Response, Tuple[Response, int]]:
     Union[Response, Tuple[Response, int]]: The response to be returned to the client.
     """
     try:
+        request.get_json()
+    except Exception as error:
+        logger.error("Error processing request json: %s", error)
+    try:
+        request.get_data()
+    except Exception as error:
+        logger.error("Error processing request data: %s", error)
+    try:
         queue_name, action_type, payload = verify_request(request)
         response_action = campaign_service.action_dispatcher(
             action_type=action_type,

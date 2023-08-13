@@ -13,7 +13,7 @@ class Campaign:
     created_by: str
     next_run_time: dt.datetime
     type: Optional[str] = None
-    duration: Optional[int] = None
+    duration: Optional[str] = None
     end_date: Optional[dt.datetime] = None
     frequency: Optional[str] = None
     time_of_day: Optional[dt.time] = None
