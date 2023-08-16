@@ -90,8 +90,9 @@ def verify_request(request: Request) -> Tuple[str, str, Dict[str, Any]]:
 def main(request: Request) -> Union[Response, Tuple[Response, int]]:
     """
     The main entry point for the cloud function. Handles the incoming
-    request, verifies it and dispatches it to the correct function
-    based on the action type in the payload.
+    request, verifies it, and dispatches it to the correct function
+    based on the action type in the payload. Additionally, this function
+    handles CORS headers for both preflight and main requests.
 
     Parameters:
     request (request): The incoming request from the client.
@@ -99,31 +100,33 @@ def main(request: Request) -> Union[Response, Tuple[Response, int]]:
     Returns:
     Union[Response, Tuple[Response, int]]: The response to be returned to the client.
     """
-    print(request.headers)
-    print(request.data)
+    
+    # Set default CORS headers
+    headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    }
+    
+    # Handle CORS preflight requests
+    if request.method == "OPTIONS":
+        return ("", 204, headers)
 
-    try:
-        request.get_json()
-    except Exception as error:
-        logger.error("Error processing request json: %s", error)
-    try:
-        request.get_data()
-    except Exception as error:
-        logger.error("Error processing request data: %s", error)
-        logger.error("Raw request data: %s", request.data)
+    # Handle main requests
     try:
         queue_name, action_type, payload = verify_request(request)
         response_action = campaign_service.action_dispatcher(
             action_type=action_type,
         )
-        response = response_action(
+        response_data = response_action(
             supabase=supabase_client,
             payload=payload,
         )
-        return jsonify(response), 200
+        return (jsonify(response_data), 200, headers)
+
     except VerificationError as error:
         logger.error("Error processing request: %s", error.message)
-        return jsonify({"message": error.message}), 400
+        return (jsonify({"message": error.message}), 400, headers)
     except Exception as error:
         logger.error("Error processing request: %s", error)
-        return jsonify({"message": "Internal server error"}), 500
+        return (jsonify({"message": "Internal server error"}), 500, headers)
