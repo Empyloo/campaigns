@@ -104,7 +104,7 @@ def main(request: Request) -> Union[Response, Tuple[Response, int]]:
     # Set default CORS headers
     headers = {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST",
+        "Access-Control-Allow-Methods": "POST, GET, DELETE, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
     }
     
