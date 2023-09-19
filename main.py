@@ -1,3 +1,4 @@
+# Path: main.py
 import logging
 import datetime as dt
 from flask import jsonify, Response, Request
@@ -129,4 +130,4 @@ def main(request: Request) -> Union[Response, Tuple[Response, int]]:
         return (jsonify({"message": error.message}), 400, headers)
     except Exception as error:
         logger.error("Error processing request: %s", error)
-        return (jsonify({"message": "Internal server error"}), 500, headers)
+        return (jsonify({"message": "Internal server error"}), 500, headers)#
